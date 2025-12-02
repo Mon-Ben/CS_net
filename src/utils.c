@@ -1,7 +1,7 @@
 #include "utils.h"
-
+#include "udp.h"
 #include "net.h"
-
+#include "ip.h"
 #include <stdio.h>
 #include <string.h>
 /**
@@ -112,6 +112,45 @@ typedef struct peso_hdr {
  * @param dst_ip    目的IP地址
  * @return uint16_t 计算得到的16位校验和
  */
-uint16_t transport_checksum(uint8_t protocol, buf_t *buf, uint8_t *src_ip, uint8_t *dst_ip) {
-    // TO-DO
+uint16_t transport_checksum(uint8_t protocol, buf_t *buf,
+                            uint8_t *src_ip, uint8_t *dst_ip)
+{
+    // 若长度为奇数，补一个字节对齐
+    int paddled = 0;
+    if(buf->len % 2) {
+        buf_add_padding(buf, 1);
+        paddled = 1;
+    }
+
+    /* Step1 加伪头部 */
+    buf_add_header(buf, sizeof(peso_hdr_t));  // 12 B
+
+    /* Step2 暂存被覆盖的 12 B（防止后续逻辑需要原数据）*/
+    uint8_t backup[sizeof(peso_hdr_t)];
+    memcpy(backup, buf->data, sizeof(peso_hdr_t));
+
+    /* Step3 填写伪头部 */
+    peso_hdr_t *ph = (peso_hdr_t *)buf->data;
+    memcpy(ph->src_ip, src_ip, NET_IP_LEN);
+    memcpy(ph->dst_ip, dst_ip, NET_IP_LEN);
+    ph->placeholder = 0;
+    ph->protocol    = protocol;
+    ph->total_len16 = swap16(buf->len - sizeof(peso_hdr_t)-paddled);  // 不含伪头部和补字节！！
+
+    /* Step4 计算校验和（覆盖伪头部 + UDP头 + UDP数据 + 奇数补零）*/
+    // 计算校验和
+    uint16_t checksum = checksum16((uint16_t *)buf->data, buf->len);
+
+    /* Step5 恢复被覆盖数据 */
+    memcpy(buf->data, backup, sizeof(peso_hdr_t));
+
+    /* Step6 删除伪头部（必须！）*/
+    buf_remove_header(buf, sizeof(peso_hdr_t));
+
+    // 移除补齐字节
+    if (paddled)
+        buf_remove_padding(buf, 1);
+    /* Step7 返回校验和 */
+    return checksum;
+
 }
