@@ -36,80 +36,87 @@ static inline const char *http_get_mime_type(const char *file_path) {
  * @param dst_ip    目标 IP 地址
  * @param dst_port  目标端口
  */
-void http_respond(tcp_conn_t *tcp_conn, char *url_path, uint16_t port, uint8_t *dst_ip, uint16_t dst_port) {
+void http_respond(tcp_conn_t *tcp_conn, char *url_path, uint16_t port, uint8_t *dst_ip, uint16_t dst_port)
+{
     FILE *file;
     char file_path[HTTP_MAX_PATH_LENGTH];
     memcpy(file_path, HTTP_RESOURCE_DIR, sizeof(HTTP_RESOURCE_DIR));
 
-    // 获取文件路径，打开文件
-    if (strcmp(url_path, "/") == 0) {  // 如果路径为 "/", 则默认打开 index.html
+    /* 默认 index.html */
+    if (strcmp(url_path, "/") == 0) {
         strcat(file_path, "/index.html");
     } else {
-        strcat(file_path, url_path);  // 否则，文件路径为 "${HTTP_RESOURCE_DIR}${url_path}"
+        strcat(file_path, url_path);
     }
-    // 打开文件
+
     file = fopen(file_path, "rb");
 
     char resp_buffer[HTTP_MAX_RESPONSE_LENGTH] = {0};
 
-    // 文件不存在时发送 404 响应
+    /* ---------- Step1 ：文件不存在 → 404 ---------- */
     if (!file) {
-        // HTTP 404 响应请求体
-        char *not_found_body = "<HTML><TITLE>Not Found</TITLE>\r\n"
-                               "The resource specified\r\n"
-                               "is unavailable or nonexistent.\r\n"
-                               "</BODY></HTML>\r\n";
-        /* Step1 ：发送 HTTP 404 请求头 */
-        // TODO: 发送 HTTP 状态行
-
-
-        // 发送 HTTP 连接信息
-        sprintf(resp_buffer, "Connection: Keep-Alive\r\n");
+        /* TODO: 发送 HTTP 状态行 */
+        strcpy(resp_buffer, "HTTP/1.1 404 NOT FOUND\r\n");
         tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
-        // TODO: 发送 HTTP 内容类型
+        /* 连接信息 */
+        strcpy(resp_buffer, "Connection: Keep-Alive\r\n");
+        tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
+        /* TODO: 发送 HTTP 内容类型 */
+        strcpy(resp_buffer, "Content-Type: text/html\r\n");
+        tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
-        // TODO: 发送 HTTP 内容长度
+        /* TODO: 发送 HTTP 内容长度 */
+        char *body404 = "<HTML><TITLE>Not Found</TITLE>\r\n"
+                        "The resource specified\r\n"
+                        "is unavailable or nonexistent.\r\n"
+                        "</BODY></HTML>\r\n";
+        sprintf(resp_buffer, "Content-Length: %zu\r\n", strlen(body404));
+        tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
+        /* TODO: 发送 HTTP 响应头与响应体的分隔符 */
+        strcpy(resp_buffer, "\r\n");
+        tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
-        // TODO: 发送 HTTP 响应头与响应体的分隔符
-
-
-        // TODO: 发送 HTTP 响应体
-
+        /* TODO: 发送 HTTP 响应体 */
+        tcp_send(tcp_conn, (uint8_t *)body404, strlen(body404), port, dst_ip, dst_port);
 
         return;
     }
 
-    /* Step2 ：发送 HTTP 请求头 */
-    // TODO: 发送 HTTP 状态行
-
-    // 发送 HTTP 连接信息
-    sprintf(resp_buffer, "Connection: Keep-Alive\r\n");
+    /* ---------- Step2/3 ：文件存在 → 200 OK ---------- */
+    /* TODO: 发送 HTTP 状态行 */
+    strcpy(resp_buffer, "HTTP/1.1 200 OK\r\n");
     tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
-    const char *content_type = http_get_mime_type(file_path);
-    // TODO: 发送 HTTP 内容类型，根据文件类型设置 MIME 类型
+    /* 连接信息 */
+    strcpy(resp_buffer, "Connection: Keep-Alive\r\n");
+    tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
+    /* TODO: 发送 HTTP 内容类型（根据文件后缀） */
+    const char *mime = http_get_mime_type(file_path);
+    sprintf(resp_buffer, "Content-Type: %s\r\n", mime);
+    tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
+    /* TODO: 发送 HTTP 内容长度 */
     fseek(file, 0, SEEK_END);
-    size_t content_length = ftell(file);
+    size_t content_len = ftell(file);
     fseek(file, 0, SEEK_SET);
-    // TODO: 发送 HTTP 内容长度
+    sprintf(resp_buffer, "Content-Length: %zu\r\n", content_len);
+    tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
+    /* TODO: 发送 HTTP 响应头与响应体的分隔符 */
+    strcpy(resp_buffer, "\r\n");
+    tcp_send(tcp_conn, (uint8_t *)resp_buffer, strlen(resp_buffer), port, dst_ip, dst_port);
 
-    // TODO: 发送 HTTP 响应头与响应体的分隔符
-
-
-    /* Step3 ：发送 HTTP 响应体 */
+    /* TODO: 每次发送读取的文件内容块 */
     size_t bytes_read;
     while ((bytes_read = fread(resp_buffer, 1, sizeof(resp_buffer), file)) > 0) {
-        // TODO: 每次发送读取的文件内容块
-
+        tcp_send(tcp_conn, (uint8_t *)resp_buffer, bytes_read, port, dst_ip, dst_port);
     }
 
-    // 后处理: 关闭文件
+    /* 后处理: 关闭文件 */
     fclose(file);
 }
 
