@@ -224,16 +224,16 @@ void tcp_in(buf_t *buf, uint8_t *src_ip) {
             if (TCP_FLG_ISSET(recv_flags, TCP_FLG_FIN)) {
                 tcp_conn->ack++;              // FIN 占 1 字节
                 send_flags = TCP_FLG_FIN | TCP_FLG_ACK;
-                tcp_conn->state = TCP_STATE_CLOSE_WAIT;
+                tcp_conn->state = TCP_STATE_LAST_ACK;
             }
             break;
 
-        case TCP_STATE_CLOSE_WAIT:
-            /* 本地已收到 FIN，等待应用调用 tcp_close 发送 FIN */
-            /* 目前只做 ACK 回应（保守）*/
-            if (TCP_FLG_ISSET(recv_flags, TCP_FLG_ACK))
-                return;                 // 空 ACK 不回复
-            break;    
+        // case TCP_STATE_CLOSE_WAIT:
+        //     /* 本地已收到 FIN，等待应用调用 tcp_close 发送 FIN */
+        //     /* 目前只做 ACK 回应（保守）*/
+        //     if (TCP_FLG_ISSET(recv_flags, TCP_FLG_ACK))
+        //         return;                 // 空 ACK 不回复
+        //     break;    
             
         case TCP_STATE_LAST_ACK:
             // TODO: 仅在收到确认报文时（ACK报文）才做出处理，否则直接返回
