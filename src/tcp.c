@@ -223,7 +223,7 @@ void tcp_in(buf_t *buf, uint8_t *src_ip) {
             /* TODO: 如果收到 FIN 报文，则增加 send_flags 相应标志位，并且进行状态转移 */
             if (TCP_FLG_ISSET(recv_flags, TCP_FLG_FIN)) {
                 tcp_conn->ack++;              // FIN 占 1 字节
-                send_flags |= TCP_FLG_ACK;
+                send_flags = TCP_FLG_FIN | TCP_FLG_ACK;
                 tcp_conn->state = TCP_STATE_CLOSE_WAIT;
             }
             break;
